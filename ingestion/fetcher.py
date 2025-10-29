@@ -1,24 +1,40 @@
 import requests
 from datetime import datetime, timedelta, timezone
 from typing import List
-from ingestion.models import EarthquakeEvent
+from models import EarthquakeEvent
 import os
 
-# Fetch earthquakes from the past minute
+
+# Fetch earthquake events from the past minute using the USGS API
+# Returns an empty list if no events are found
 def fetch_last_minute_events() -> List[EarthquakeEvent]:
     end = datetime.now(timezone.utc)
     start = end - timedelta(minutes=1)
+    url = os.getenv("USGS_API_URL")
+
     params = {
         "format": "geojson",
         "starttime": start.isoformat(),
         "endtime": end.isoformat(),
     }
-    url = os.getenv("USGS_API_URL")
-    response = requests.get(url, params=params, timeout=10)
-    response.raise_for_status()
-    data = response.json()
+
+    print(f"Fetching events from {start.isoformat()} to {end.isoformat()} ...")
+
+    try:
+        response = requests.get(url, params=params, timeout=15)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        print("Error fetching data: {e}")
+        return []
+
+    features = data.get("features", [])
+    if not features:
+        print("No events in the past minute -- waiting for the next poll.")
+        return []
+    
     events = []
-    for f in data.get("features", []):
+    for f in features:
         props = f.get("properties", {})
         coords = f.get("geometry", {}).get("coordinates", [None, None, None])
         events.append(
@@ -34,4 +50,14 @@ def fetch_last_minute_events() -> List[EarthquakeEvent]:
                 depth=coords[2],
             )
         )
+
+    print(f"Fetched {len(events)} events.")
     return events
+
+
+if __name__ == "__main__":
+    events = fetch_last_minute_events()
+    print(f"Fetched {len(events)} total events.")
+    if events:
+        for e in events[:3]: 
+            print(e.__dict__)
