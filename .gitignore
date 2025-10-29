@@ -1,0 +1,71 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.so
+*.egg
+*.egg-info/
+.eggs/
+*.log
+*.tmp
+*.bak
+
+# ---- Virtual environments ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- Environment files ----
+.env
+.env.*
+
+# ---- IDE / Editor configs ----
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ---- OS files ----
+.DS_Store
+Thumbs.db
+
+# ---- Docker / Compose ----
+*.pid
+*.seed
+*.tar
+*.gz
+docker-compose.override.yml
+**/tmp/
+**/logs/
+**/data/
+
+# ---- Notebooks / Reports ----
+*.ipynb_checkpoints
+notebooks/.ipynb_checkpoints/
+
+# ---- Build / Distribution ----
+build/
+dist/
+*.spec
+
+# ---- MySQL/Postgres dump files ----
+*.sql
+*.dump
+
+# ---- Grafana exports ----
+grafana/snapshots/
+grafana/provisioning/dashboards/*.tmp
+
+# ---- Kafka / Debezium temp ----
+connect/logs/
+connect/data/
+
+# ---- Secrets / Keys ----
+*.pem
+*.key
+*.crt
+*.json
+secrets/
