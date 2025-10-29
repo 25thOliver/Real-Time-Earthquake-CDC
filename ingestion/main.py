@@ -2,16 +2,17 @@ import os
 import time
 import pandas as pd
 from dotenv import load_dotenv
-from fetcher import fetch_recent_events
+from fetcher import fetch_last_minute_events
 from staging import insert_df, ensure_table, wait_for_db
 from schema import schemas
+from datetime import datetime
 
 load_dotenv()
 
 # Environment variables
 table_name = "earthquake_minute"
-poll_interval = int(os.getenv("POLL_INTERVAL", 15))  # seconds
-fetch_window = int(os.getenv("FETCH_WINDOW_MINUTES", 1))  # minutes
+poll_interval = int(os.getenv("POLL_INTERVAL", 60))  
+
 
 def main():
     print(f"Environment loaded. Connecting to DB: {os.getenv('MYSQL_HOST')}")
@@ -20,7 +21,8 @@ def main():
 
     while True:
         try:
-            events = fetch_recent_events(minutes=fetch_window)
+            print(f"[{datetime.utcnow()}] Polling for past-minute earthquakes...")
+            events = fetch_last_minute_events()
             if events:
                 df = pd.DataFrame([e.__dict__ for e in events])
                 insert_df(df, table_name)

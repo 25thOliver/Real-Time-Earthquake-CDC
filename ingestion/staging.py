@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from dotenv import load_dotenv
-from ingestion.schema import schemas
+from schema import schemas
 
 load_dotenv()
 
@@ -32,12 +32,12 @@ def wait_for_db(max_retries=10, delay=5):
 
 
 # Ensure table exists according to defined schema
-def ensure_table(table_name: str):
-    ddl = schemas.get(table_name)
+def ensure_table(table_name: str, schema_sql: str | None = None):
+    ddl = schema_sql or schemas.get(table_name)
     if ddl:
         with engine.begin() as conn:
             conn.execute(text(ddl))
-        print("Table '{table_name}' verified/created.")
+        print(f"Table '{table_name}' verified/created.")
     else:
         print(f"No schema found for table '{table_name}', skipping explicit creation.")
 
