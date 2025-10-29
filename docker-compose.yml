@@ -1,0 +1,46 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: earthquake_db
+      MYSQL_USER: poller
+      MYSQL_PASSWORD: poller_pw
+    ports:
+      - "3306:3306"
+    command: ["--default-authentication-plugin=mysql_native_password"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - mysql
+
+  app:
+    build: .
+    container_name: earthquake_ingestor
+    restart: always
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: poller
+      MYSQL_PASSWORD: poller_pw
+      MYSQL_DATABASE: earthquake_db
+      USGS_API_URL: https://earthquake.usgs.gov/fdsnws/event/1/query
+      POLL_INTERVAL: 15
+    depends_on:
+      - mysql
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: ["python", "ingestion/main.py"]
+
+volumes:
+  mysql_data:
