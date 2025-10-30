@@ -8,14 +8,15 @@ import os
 # Fetch earthquake events from the past minute using the USGS API
 # Returns an empty list if no events are found
 def fetch_last_minute_events() -> List[EarthquakeEvent]:
+    window_minutes = int(os.getenv("FETCH_WINDOW_MINUTES"))
     end = datetime.now(timezone.utc)
-    start = end - timedelta(minutes=1)
+    start = end - timedelta(minutes=window_minutes)
     url = os.getenv("USGS_API_URL")
 
     params = {
         "format": "geojson",
-        "starttime": start.isoformat(),
-        "endtime": end.isoformat(),
+        "starttime": start.isoformat(timespec="seconds"),
+        "endtime": end.isoformat(timespec="seconds"),
     }
 
     print(f"Fetching events from {start.isoformat()} to {end.isoformat()} ...")
