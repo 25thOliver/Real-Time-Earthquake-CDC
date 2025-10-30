@@ -47,5 +47,21 @@ def insert_df(df: pd.DataFrame, table_name: str):
     if df.empty:
         print("No new rows to insert.")
         return
-    df.to_sql(table_name, engine, if_exists="append", index=False)
-    print(f"Inserted {len(df)} rows into '{table_name}'.")
+
+    try:
+        with engine.begin() as conn:
+            temp_table = f"_{table_name}_temp"
+            df.to_sql(temp_table, conn, if_exists="replace", index=False)
+
+            # Explicit column list to avoid mismatched counts/order
+            cols = ", ".join(df.columns)
+            conn.execute(text(f"""
+                INSERT IGNORE INTO {table_name} ({cols})
+                SELECT {cols} FROM {temp_table};
+            """))
+
+            conn.execute(text(f"DROP TABLE {temp_table};"))
+        print(f"Inserted {len(df)} new rows into '{table_name}' (duplicates ignored).")
+    except Exception as e:
+        print(f"Error inserting data: {e}")
+
