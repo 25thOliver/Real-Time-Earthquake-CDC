@@ -63,7 +63,7 @@ services:
       - 9092:9092
 
   kafka-connect:
-    image: debezium/connect:2.7
+    image: debezium/connect:2.7.2.Final
     container_name: kafka-connect
     depends_on:
       - kafka
@@ -79,6 +79,19 @@ services:
       ENABLE_DEBEZIUM_SCRIPTING: "true"
     ports:
       - 8083:8083
+    volumes:
+      - ./connectors:/kafka/connectors
+    command:
+      - bash
+      - -c
+      - |
+        /docker-entrypoint.sh &
+        sleep 10
+        for f in /kafka/connectors/*.json; do
+          echo "Registering connector: $f"
+          curl -X POST -H "Content-Type: application/json" --data @"$f" http://localhost:8083/connectors
+        done
+        wait
 
 
 volumes:
