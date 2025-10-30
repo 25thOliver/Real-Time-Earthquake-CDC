@@ -15,7 +15,8 @@ services:
       retries: 10
     volumes:
       - mysql_data:/var/lib/mysql
-
+      - ./mysql.cnf:/etc/mysql/conf.d/mysql.cnf:ro
+      
   adminer:
     image: adminer
     container_name: adminer
