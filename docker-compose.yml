@@ -33,7 +33,9 @@ services:
 
 
   kafka-connect:
-    image: debezium/connect:2.7.2.Final
+    build:
+      context: .
+      dockerfile: Dockerfile.connect
     container_name: kafka-connect
     depends_on:
       - kafka
@@ -51,6 +53,12 @@ services:
     volumes:
       - ./connectors:/kafka/connectors
       - connect_data:/kafka/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 40s
     networks:
       - kafka-net
 
@@ -59,28 +67,31 @@ services:
     image: curlimages/curl:8.6.0
     container_name: connector-registrar
     depends_on:
-      - kafka-connect
+      kafka-connect:
+        condition: service_healthy
     volumes:
       - ./connectors:/connectors
     command: >
       sh -c '
-      echo "Waiting for Kafka Connect REST API...";
-      until curl -s http://kafka-connect:8083/connectors >/dev/null 2>&1; do
-        sleep 5;
-        echo "Still waiting for Kafka Connect...";
-      done;
-      echo "Registering connectors...";
+      echo "Kafka Connect is healthy, registering connectors...";
+      # Ensure jq is available (base image is Alpine)
+      apk add --no-cache jq >/dev/null 2>&1 || true;
+      
       for f in /connectors/*.json; do
-        [ -e "$f" ] || continue;
-        name=$(basename "$f" .json);
-        echo "→ Registering $name from $f";
-        if curl -s -o /dev/null -w "%{http_code}" http://kafka-connect:8083/connectors/$name | grep -q "200"; then
-          echo "Connector $name already exists — skipping.";
+        [ -e "$$f" ] || continue;
+        name=$(basename "$$f" .json);
+        echo "→ Registering $$name from $$f";
+        status=$(curl -s -o /dev/null -w "%{http_code}" http://kafka-connect:8083/connectors/$$name);
+        if [ "$$status" = "200" ]; then
+          echo "Connector $name already exists — updating.";
+          jq '.config' "$$f" | curl -sS --fail -X PUT -H "Content-Type: application/json" --data @- \
+            http://kafka-connect:8083/connectors/$$name/config \
+            && echo "Updated $$name" || echo "Failed to update $$name";
         else
-          curl -s -X POST -H "Content-Type: application/json" \
-            --data @"$f" http://kafka-connect:8083/connectors \
-            && echo "Registered $name" \
-            || echo "Failed to register $name";
+          echo "Registering new connector $name...";
+          curl -sS --fail -X POST -H "Content-Type: application/json" --data @"$$f" \
+            http://kafka-connect:8083/connectors \
+            && echo "Registered $$name" || echo "Failed to register $$name";
         fi;
       done;
       echo "All connectors processed.";

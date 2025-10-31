@@ -1,0 +1,10 @@
+# Dockerfile.connect
+FROM debezium/connect:2.7.2.Final
+
+# Install netcat, unzip, curl for health checks and plugin install
+USER root
+RUN microdnf install -y nmap-ncat unzip curl && microdnf clean all
+
+RUN mkdir -p /kafka/connect/plugins && chown -R kafka:kafka /kafka/connect/plugins
+
+USER kafka
