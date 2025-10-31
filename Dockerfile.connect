@@ -7,7 +7,7 @@ RUN microdnf install -y nmap-ncat unzip curl && microdnf clean all
 
 RUN mkdir -p /kafka/connect/plugins && chown -R kafka:kafka /kafka/connect/plugins
 
-# Install Confluent JDBC Sink connector (via Confluent Hub archive) and PostgreSQL JDBC driver
+# Install PostgreSQL sink using Debezium Sink Connector(Bundled in the image)
 ENV CONFLUENT_JDBC_VERSION=10.7.6 \
     POSTGRES_JDBC_VERSION=42.7.4
 RUN curl -fL -o /tmp/kc-jdbc.zip \
