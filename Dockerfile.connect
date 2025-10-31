@@ -7,15 +7,4 @@ RUN microdnf install -y nmap-ncat unzip curl && microdnf clean all
 
 RUN mkdir -p /kafka/connect/plugins && chown -R kafka:kafka /kafka/connect/plugins
 
-# Install PostgreSQL sink using Debezium Sink Connector(Bundled in the image)
-ENV CONFLUENT_JDBC_VERSION=10.7.6 \
-    POSTGRES_JDBC_VERSION=42.7.4
-RUN curl -fL -o /tmp/kc-jdbc.zip \
-      https://api.hub.confluent.io/api/plugins/confluentinc/kafka-connect-jdbc/versions/${CONFLUENT_JDBC_VERSION}/archives/kafka-connect-jdbc-${CONFLUENT_JDBC_VERSION}.zip \
-    && unzip /tmp/kc-jdbc.zip -d /kafka/connect/plugins \
-    && rm -f /tmp/kc-jdbc.zip \
-    && curl -fL -o /kafka/connect/plugins/confluentinc-kafka-connect-jdbc/lib/postgresql-${POSTGRES_JDBC_VERSION}.jar \
-      https://repo1.maven.org/maven2/org/postgresql/postgresql/${POSTGRES_JDBC_VERSION}/postgresql-${POSTGRES_JDBC_VERSION}.jar \
-    || (echo "Failed to install JDBC Sink plugin" >&2; exit 1)
-
 USER kafka
