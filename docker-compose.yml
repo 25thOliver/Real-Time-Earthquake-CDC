@@ -73,20 +73,21 @@ services:
       - ./connectors:/connectors
     command: >
       sh -c '
+      set -e;
       echo "Kafka Connect is healthy, registering connectors...";
-      # Ensure jq is available (base image is Alpine)
-      apk add --no-cache jq >/dev/null 2>&1 || true;
       
       for f in /connectors/*.json; do
         [ -e "$$f" ] || continue;
-        name=$(basename "$$f" .json);
+        name=$(sed -n "s/^[[:space:]]*\"name\"[[:space:]]*:[[:space:]]*\"\(.*\)\".*/\1/p" "$$f" | head -n1);
+        if [ -z "$$name" ]; then name=$(basename "$$f" .json); fi;
         echo "→ Registering $$name from $$f";
         status=$(curl -s -o /dev/null -w "%{http_code}" http://kafka-connect:8083/connectors/$$name);
         if [ "$$status" = "200" ]; then
-          echo "Connector $name already exists — updating.";
-          jq '.config' "$$f" | curl -sS --fail -X PUT -H "Content-Type: application/json" --data @- \
-            http://kafka-connect:8083/connectors/$$name/config \
-            && echo "Updated $$name" || echo "Failed to update $$name";
+          echo "Connector $name exists — replacing via DELETE+POST.";
+          curl -sS --fail -X DELETE http://kafka-connect:8083/connectors/$$name >/dev/null || true;
+          curl -sS --fail -X POST -H "Content-Type: application/json" --data @"$$f" \
+            http://kafka-connect:8083/connectors \
+            && echo "Re-registered $$name" || echo "Failed to re-register $$name";
         else
           echo "Registering new connector $name...";
           curl -sS --fail -X POST -H "Content-Type: application/json" --data @"$$f" \
