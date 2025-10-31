@@ -8,16 +8,21 @@ import os
 # Fetch earthquake events from the past minute using the USGS API
 # Returns an empty list if no events are found
 def fetch_last_minute_events() -> List[EarthquakeEvent]:
-    window_minutes = int(os.getenv("FETCH_WINDOW_MINUTES"))
+    # Defaults: fetch a slightly wider window to reduce gaps, rely on PK dedupe
+    window_minutes = int(os.getenv("FETCH_WINDOW_MINUTES", "5"))
     end = datetime.now(timezone.utc)
     start = end - timedelta(minutes=window_minutes)
-    url = os.getenv("USGS_API_URL")
+    url = os.getenv("USGS_API_URL", "https://earthquake.usgs.gov/fdsnws/event/1/query")
+    min_mag = os.getenv("USGS_MIN_MAG")  # optional
 
     params = {
         "format": "geojson",
         "starttime": start.isoformat(timespec="seconds"),
         "endtime": end.isoformat(timespec="seconds"),
+        "orderby": "time",
     }
+    if min_mag:
+        params["minmagnitude"] = min_mag
 
     print(f"Fetching events from {start.isoformat()} to {end.isoformat()} ...")
 
@@ -26,7 +31,7 @@ def fetch_last_minute_events() -> List[EarthquakeEvent]:
         response.raise_for_status()
         data = response.json()
     except Exception as e:
-        print("Error fetching data: {e}")
+        print(f"Error fetching data: {e}")
         return []
 
     features = data.get("features", [])
