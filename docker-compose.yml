@@ -1,45 +1,4 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: mysql
-    restart: always
-    env_file:
-      - .env
-    ports:
-      - "3306:3306"
-    command: ["--default-authentication-plugin=mysql_native_password"]
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./mysql.cnf:/etc/mysql/conf.d/mysql.cnf:ro
-
-  adminer:
-    image: adminer
-    container_name: adminer
-    restart: always
-    ports:
-      - "8080:8080"
-    depends_on:
-      - mysql
-
-  earthquake_ingestor:
-    build: .
-    container_name: earthquake_ingestor
-    restart: always
-    env_file:
-      - .env
-    depends_on:
-      mysql:
-        condition: service_healthy
-    #volumes:
-     # - .:/app
-    working_dir: /app
-    command: ["python", "-u", "ingestion/main.py"]
-
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
     container_name: zookeeper
@@ -48,26 +7,34 @@ services:
       ZOOKEEPER_TICK_TIME: 2000
     ports:
       - 2181:2181
+    networks:
+      - kafka-net
 
   kafka:
     image: confluentinc/cp-kafka:7.6.1
     container_name: kafka
+    restart: always
     depends_on:
       - zookeeper
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
       - 9092:9092
+    networks:
+      - kafka-net
+
 
   kafka-connect:
     image: debezium/connect:2.7.2.Final
     container_name: kafka-connect
     depends_on:
       - kafka
-      - mysql
     environment:
       BOOTSTRAP_SERVERS: kafka:9092
       GROUP_ID: 1
@@ -81,18 +48,110 @@ services:
       - 8083:8083
     volumes:
       - ./connectors:/kafka/connectors
-    command:
-      - bash
-      - -c
-      - |
-        /docker-entrypoint.sh &
-        sleep 10
-        for f in /kafka/connectors/*.json; do
-          echo "Registering connector: $f"
-          curl -X POST -H "Content-Type: application/json" --data @"$f" http://localhost:8083/connectors
-        done
-        wait
+    networks:
+      - kafka-net
 
+
+  connector-registrar:
+    image: curlimages/curl:8.6.0
+    container_name: connector-registrar
+    depends_on:
+      - kafka-connect
+    volumes:
+      - ./connectors:/connectors
+    command: >
+      sh -c '
+      echo "Waiting for Kafka Connect REST API...";
+      until curl -s http://kafka-connect:8083/connectors >/dev/null 2>&1; do
+        sleep 5;
+        echo "Still waiting for Kafka Connect...";
+      done;
+      echo "Registering connectors...";
+      for f in /connectors/*.json; do
+        [ -e "$f" ] || continue;
+        name=$(basename "$f" .json);
+        echo "→ Registering $name from $f";
+        if curl -s -o /dev/null -w "%{http_code}" http://kafka-connect:8083/connectors/$name | grep -q "200"; then
+          echo "Connector $name already exists — skipping.";
+        else
+          curl -s -X POST -H "Content-Type: application/json" \
+            --data @"$f" http://kafka-connect:8083/connectors \
+            && echo "Registered $name" \
+            || echo "Failed to register $name";
+        fi;
+      done;
+      echo "All connectors processed.";
+      '
+    networks:
+      - kafka-net
+
+
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    env_file:
+      - .env
+    command: ["--default-authentication-plugin=mysql_native_password"]
+    ports:
+      - 3306:3306
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql.cnf:/etc/mysql/conf.d/mysql.cnf:ro
+    networks:
+      - kafka-net
+
+  adminer:
+    image: adminer
+    container_name: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - mysql
+    networks:
+      - kafka-net
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespass
+      POSTGRES_DB: earthquake_sink
+    ports:
+      - "5435:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    networks:
+      - kafka-net
+
+  earthquake_ingestor:
+    build: .
+    container_name: earthquake_ingestor
+    restart: always
+    env_file:
+      - .env
+    depends_on:
+      mysql:
+        condition: service_healthy
+    working_dir: /app
+    command: ["python", "-u", "ingestion/main.py"]
+    networks:
+      - kafka-net
 
 volumes:
   mysql_data:
+  pg_data:
+
+networks:
+  kafka-net:
+    driver: bridge
