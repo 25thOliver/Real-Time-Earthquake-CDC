@@ -26,6 +26,8 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
       - 9092:9092
+    volumes:
+      - kafka_data:/var/lib/kafka/data
     networks:
       - kafka-net
 
@@ -48,6 +50,7 @@ services:
       - 8083:8083
     volumes:
       - ./connectors:/kafka/connectors
+      - connect_data:/kafka/data
     networks:
       - kafka-net
 
@@ -151,6 +154,8 @@ services:
 volumes:
   mysql_data:
   pg_data:
+  kafka_data:
+  connect_data:
 
 networks:
   kafka-net:
