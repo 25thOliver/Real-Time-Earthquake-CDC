@@ -80,19 +80,21 @@ services:
         [ -e "$$f" ] || continue;
         name=$(sed -n "s/^[[:space:]]*\"name\"[[:space:]]*:[[:space:]]*\"\(.*\)\".*/\1/p" "$$f" | head -n1);
         if [ -z "$$name" ]; then name=$(basename "$$f" .json); fi;
-        echo "→ Registering $$name from $$f";
-        status=$(curl -s -o /dev/null -w "%{http_code}" http://kafka-connect:8083/connectors/$$name);
-        if [ "$$status" = "200" ]; then
-          echo "Connector $name exists — replacing via DELETE+POST.";
-          curl -sS --fail -X DELETE http://kafka-connect:8083/connectors/$$name >/dev/null || true;
-          curl -sS --fail -X POST -H "Content-Type: application/json" --data @"$$f" \
-            http://kafka-connect:8083/connectors \
-            && echo "Re-registered $$name" || echo "Failed to re-register $$name";
+        echo "→ Applying $$name from $$f";
+        code=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X POST -H "Content-Type: application/json" --data @"$$f" http://kafka-connect:8083/connectors || true);
+        if [ "$$code" = "201" ] || [ "$$code" = "200" ]; then
+          echo "Applied $$name (created).";
+        elif [ "$$code" = "409" ]; then
+          echo "$$name exists — replacing via DELETE+POST.";
+          curl -sS -o /tmp/resp.json -w "%{http_code}" -X DELETE http://kafka-connect:8083/connectors/$$name >/dev/null || true;
+          code2=$(curl -s -o /tmp/resp.json -w "%{http_code}" -X POST -H "Content-Type: application/json" --data @"$$f" http://kafka-connect:8083/connectors || true);
+          if [ "$$code2" = "201" ] || [ "$$code2" = "200" ]; then
+            echo "Re-registered $$name";
+          else
+            echo "Failed to re-register $$name (HTTP $$code2):"; cat /tmp/resp.json; echo;
+          fi;
         else
-          echo "Registering new connector $name...";
-          curl -sS --fail -X POST -H "Content-Type: application/json" --data @"$$f" \
-            http://kafka-connect:8083/connectors \
-            && echo "Registered $$name" || echo "Failed to register $$name";
+          echo "Failed to apply $$name (HTTP $$code):"; cat /tmp/resp.json; echo;
         fi;
       done;
       echo "All connectors processed.";
