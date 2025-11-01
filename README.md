@@ -27,3 +27,12 @@ Each component plays a critical role:
 **- PostgreSQL** - Sink database for analytics
 **- Grafana** - Visualization layer for insights
 **- Kafka UI** - Monitors topics and connectors visually
+
+![Kafka Topics](images/kafka_topics.png)
+*Kafka UI showing topics*
+
+![Sink and Source Connectors](images/connectors.png)
+*Sink and Source Connectors*
+
+## Phases of the Build
+### Phase 1: USGS 
