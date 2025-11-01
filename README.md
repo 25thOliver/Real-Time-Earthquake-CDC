@@ -4,6 +4,15 @@ Bringing live seismic data to life from API to dashboards, in seconds. This proj
 
 ## Project Overview
 
+Earthquakes happen without warning, and understanding their pattern. Traditional earthquake monitoring systems often have delays between when an earthquake occurs and when the data becomes available for analysis. This project eliminates that gap.
+
+**Real-world impact:**
+- Emergency responders can see global seismic activity as it happens
+- Researchers can analyze earthquake patterns in real-time
+- The public can track seismic events in their region instantly
+
+Think of it like the difference between reading yesterday's newspaper vs. watching live news-except for earthquakes happening anywhere on Earth.
+
 Every minute, the U.S. Geological Survey(USGS) publishes new earthquake events around the world.
 In this project, we built a pipeline that:
 
