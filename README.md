@@ -62,9 +62,13 @@ https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={NOW-1
 New events are upserted into `earthquake_minute` table in MySQL.
 
 ![Sample MySQL table rows after API ingestion](images/mysql_data.png)
-*Sample MySQL table rows after API ingestion in Adminer UI*
+*Earthquake MySQL table rows after API ingestion in Adminer UI*
 
 ### Phase 2: Change-Data-Capture(CDC)
+Imagine MySQL is a busy restaurant kitchen, and the binlog is a camera recording everything the chefs do. Debezium is like a food critic watching that recording in real-time, narrating every dish that gets plated, modified, or sent back.
+
+Without CDC, we'd have to repeatedly ask MySQL "What's new?" every few seconds-inefficient and slow. With CDC, MySQL tells us the moment something changes. It's the difference between spam-refreshing your email vs. getting instant push notifications.
+
 - MySQL binary logging enabled (`binlog_format=ROW`)
     *Understanding the Binlog*
     At the core of this project lies **MySQL's Binary log(binlog), a special journal that records every change made to the database: inserts, updates, and deletes.
