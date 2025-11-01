@@ -58,3 +58,35 @@ New events are upserted into `earthquake_minute` table in MySQL.
 
 ![Kafka UI → Topics → Messages view](images/kafka_messages.png)
 *Kafka UI → Topics → Messages view*
+
+### Phase 3: Grafana Visualization
+Grafana connects to PostgreSQL and brings seismic data to life through four panels:
+**1. Real-Time World Map** – Global quake visualization
+**2. Quakes Per Hour** – Time-series trend of activity
+**3 Top 5 Hotspot Regions** – Aggregated regional summary
+**4 Quakes in Last Minute (Gauge)** – Real-time activity level
+
+![Grafana dashboard](images/grafana_dashboard.png)
+*Grafana dashboard (full view)*
+
+![Close-up of world map panel](images/world_map.png)
+*Close-up of world map panel*
+
+## Conclusion
+This project demonstrates the power of streaming data from a global earthquake API to actionable visualizations in real time.
+By Combining open-source tools like **Debezium**, **Kafka**, and **Grafana**, we built a pipeline that's not just functional but alive constantly evolving with Earth's tremors.
+
+![Grafana + Kafka UI side-by-side for the closing shot](images/final_shot.png)
+
+### Quick Start
+```bash
+# Start all services
+docker compose up -d
+
+# Access components
+MySQL        → localhost:3306
+Kafka UI     → http://localhost:8082
+Grafana      → http://localhost:3000
+PostgreSQL   → localhost:5435
+Adminer UI   → http://localhost:8080
+```
