@@ -6,10 +6,15 @@ Bringing live seismic data to life from API to dashboards, in seconds. This proj
 
 Every minute, the U.S. Geological Survey(USGS) publishes new earthquake events around the world.
 In this project, we built a pipeline that:
+
 **1. Fetches** new quakes every minute from the USGS API
+
 **2. Upserts** events into MySQL
+
 **3. Capture Changes** in real-time via Debezium & Kafka
+
 **4. Streams** them into PostgreSQL
+
 **5. Visualizes** live quakes and metrics in Grafana dashboards
 
 ![System Architecture](images/architecture.png)
@@ -21,12 +26,19 @@ USGS API → MySQL → Debezium → Kafka → JDBC Sink → PostgreSQL → Grafa
 
 ```
 Each component plays a critical role:
+
 **- MySQL** - Primary database storing fresh quake data
+
 **- Adminer UI** - Visualizes our data in primary MySQL database after API ingestion
+
 **- Debezium** - Captures every insert/update via CDC
+
 **- Kafka** - Streams events through topics
+
 **- PostgreSQL** - Sink database for analytics
+
 **- Grafana** - Visualization layer for insights
+
 **- Kafka UI** - Monitors topics and connectors visually
 
 ![Kafka Topics](images/kafka_topics.png)
@@ -37,6 +49,11 @@ Each component plays a critical role:
 
 ## Phases of the Build
 ### Phase 1: USGS API Integration
+
+**What's happening here:** The United States Geological Survey(USGS) maintains a public API that reports every earthquake detected globally. We poll (ask) this API every 60s: "What earthquake happened in the last minute?"
+
+**Why every minute?** Earthquakes don't wait, and neither should our data. By checking every minute, we ensure our dashboard shows the most current picture of global seismic activity.
+
 A Python script polls the API:
 ```bash
 https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={NOW-1min}&endtime={NOW}
@@ -74,9 +91,13 @@ New events are upserted into `earthquake_minute` table in MySQL.
 
 ### Phase 3: Grafana Visualization
 Grafana connects to PostgreSQL and brings seismic data to life through four panels:
+
 **1. Real-Time World Map** – Global quake visualization
+
 **2. Quakes Per Hour** – Time-series trend of activity
+
 **3 Top 5 Hotspot Regions** – Aggregated regional summary
+
 **4 Quakes in Last Minute (Gauge)** – Real-time activity level
 
 ![Grafana dashboard](images/grafana_dashboard.png)
