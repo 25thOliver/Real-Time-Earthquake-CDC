@@ -165,11 +165,49 @@ services:
     networks:
       - kafka-net
 
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    restart: always
+    depends_on:
+      - postgres
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_PATHS_PROVISIONING=/etc/grafana/provisioning
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - kafka-net
+
+  kafka-ui:
+      image: provectuslabs/kafka-ui:latest
+      container_name: kafka-ui
+      restart: always
+      ports:
+        - "8082:8080"  
+      environment:
+        KAFKA_CLUSTERS_0_NAME: local
+        KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+        KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+        KAFKA_CLUSTERS_0_KAFKA_CONNECT_0_NAME: connect
+        KAFKA_CLUSTERS_0_KAFKA_CONNECT_0_ADDRESS: http://kafka-connect:8083
+      depends_on:
+        - kafka
+        - kafka-connect
+      networks:
+        - kafka-net
+
 volumes:
   mysql_data:
   pg_data:
   kafka_data:
   connect_data:
+  grafana_data:
 
 networks:
   kafka-net:
