@@ -46,3 +46,15 @@ New events are upserted into `earthquake_minute` table in MySQL.
 
 ![Sample MySQL table rows after API ingestion](images/mysql_data.png)
 *Sample MySQL table rows after API ingestion in Adminer UI*
+
+### Phase 2: Change-Data-Capture(CDC)
+- MySQL binary logging enabled (`binlog_format=ROW`)
+- Debezium MySQL connector listens for changes
+- Kafka topics carry those changes
+- JDBC Sink connector writes them to PostgrSQL
+
+![Debezium connector configuration (Kafka Connect UI)](images/sink_connector.png)
+*Debezium connector configuration (Kafka Connect UI)*
+
+![Kafka UI → Topics → Messages view](images/kafka_messages.png)
+*Kafka UI → Topics → Messages view*
