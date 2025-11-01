@@ -114,7 +114,7 @@ Grafana connects to PostgreSQL and brings seismic data to life through four pane
 **3. Top 5 Hotspot Regions** — Aggregated regional summary
    - *Why it's useful:* Quantify which areas are most seismically active over time
 
-**4. Quakes in Last Minute (Gauge)** — Real-time activity level
+**4. Quakes in Last Hour (Gauge)** — Real-time activity level
    - *Why it's useful:* A quick "pulse check" showing if Earth is currently rumbling more than usual
 
 ![Grafana dashboard](images/grafana_dashboard.png)
