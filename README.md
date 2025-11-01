@@ -49,6 +49,19 @@ New events are upserted into `earthquake_minute` table in MySQL.
 
 ### Phase 2: Change-Data-Capture(CDC)
 - MySQL binary logging enabled (`binlog_format=ROW`)
+    *Understanding the Binlog*
+    At the core of this project lies **MySQL's Binary log(binlog), a special journal that records every change made to the database: inserts, updates, and deletes.
+
+    By enabling it in **ROW format**, MySQL doesn't just log that "something changed". It records **exactly what changed** in each row. This is what allows tools like **Debezium** to reconstruct the full story for every database mutation in real-time.
+    ![Binlog Settings](images/binlog.png)
+
+    **Why it Matters**
+    - `log_bin = ON` - Enables binary logging
+    - `binlog_format = ROW` - Captures row-level detail for CDC
+    - `server_id` - Provides a unique identifier for the MySQL instance(required by Debezium)
+
+    Once the binlog is active, Debezium can tap into it via Kafka Connect, continuously streaming every change into Kafka topics—turning your database into a real-time data source.
+
 - Debezium MySQL connector listens for changes
 - Kafka topics carry those changes
 - JDBC Sink connector writes them to PostgrSQL
