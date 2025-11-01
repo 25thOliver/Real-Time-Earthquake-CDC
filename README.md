@@ -22,6 +22,7 @@ USGS API → MySQL → Debezium → Kafka → JDBC Sink → PostgreSQL → Grafa
 ```
 Each component plays a critical role:
 **- MySQL** - Primary database storing fresh quake data
+**- Adminer UI** - Visualizes our data in primary MySQL database after API ingestion
 **- Debezium** - Captures every insert/update via CDC
 **- Kafka** - Streams events through topics
 **- PostgreSQL** - Sink database for analytics
@@ -35,4 +36,13 @@ Each component plays a critical role:
 *Sink and Source Connectors*
 
 ## Phases of the Build
-### Phase 1: USGS 
+### Phase 1: USGS API Integration
+A Python script polls the API:
+```bash
+https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={NOW-1min}&endtime={NOW}
+
+```
+New events are upserted into `earthquake_minute` table in MySQL.
+
+![Sample MySQL table rows after API ingestion](images/mysql_data.png)
+*Sample MySQL table rows after API ingestion in Adminer UI*
