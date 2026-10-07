@@ -2,16 +2,16 @@ import os
 import time
 import pandas as pd
 from dotenv import load_dotenv
-from fetcher import fetch_last_minute_events
-from staging import insert_df, ensure_table, wait_for_db
+from fetcher import fetch_events_updated_after
+from staging import insert_df, ensure_table, wait_for_db, get_max_updated_at
 from schema import schemas
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 load_dotenv()
 
-# Environment variables
 table_name = "earthquake_minute"
-poll_interval = int(os.getenv("POLL_INTERVAL", 60))  
+poll_interval = int(os.getenv("POLL_INTERVAL", 60))
+default_lookback_minutes = int(os.getenv("INITIAL_LOOKBACK_MINUTES", 60))
 
 
 def main():
@@ -21,15 +21,22 @@ def main():
 
     while True:
         try:
-            print(f"[{datetime.utcnow()}] Polling for past-minute earthquakes...")
-            events = fetch_last_minute_events()
+            max_updated_ms = get_max_updated_at(table_name)
+            if max_updated_ms:
+                watermark = datetime.fromtimestamp(max_updated_ms / 1000.0, tz=timezone.utc) - timedelta(minutes=1)
+            else:
+                watermark = datetime.now(timezone.utc) - timedelta(minutes=default_lookback_minutes)
+
+            print(f"[{datetime.now(timezone.utc).isoformat()}] Polling USGS API for events updated after {watermark.isoformat()}...")
+            events = fetch_events_updated_after(watermark)
+
             if events:
                 df = pd.DataFrame([e.__dict__ for e in events])
                 insert_df(df, table_name)
             else:
-                print("No earthquakes detected in the last period.")
+                print("No new or updated earthquakes detected in this poll cycle.")
         except Exception as e:
-            print("Error during fetch/stage:", e)
+            print("Error during fetch/stage cycle:", e)
         time.sleep(poll_interval)
 
 
