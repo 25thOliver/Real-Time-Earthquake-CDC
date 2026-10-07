@@ -37,6 +37,7 @@ services:
       context: .
       dockerfile: Dockerfile.connect
     container_name: kafka-connect
+    restart: always
     depends_on:
       - kafka
     environment:
