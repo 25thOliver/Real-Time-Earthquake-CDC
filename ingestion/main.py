@@ -2,9 +2,9 @@ import os
 import time
 import pandas as pd
 from dotenv import load_dotenv
-from fetcher import fetch_events_updated_after
-from staging import insert_df, ensure_table, wait_for_db, get_max_updated_at
-from schema import schemas
+from ingestion.fetcher import fetch_events_updated_after
+from ingestion.staging import insert_df, ensure_table, wait_for_db, get_max_updated_at
+from ingestion.schema import schemas
 from datetime import datetime, timedelta, timezone
 
 load_dotenv()
