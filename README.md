@@ -77,7 +77,7 @@ To solve both challenges:
 2. **CDC-Compatible Upserts:** Records are staged into MySQL using `ON DUPLICATE KEY UPDATE` (`UPSERT`). When historical records are revised, MySQL executes an `UPDATE`, emitting a binary log event that Debezium captures and streams downstream.
 
 A Python script polls the API:
-```bash
+`bash
 https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&updatedafter={MAX_UPDATED_TIMESTAMP}
 New and updated events are staged into the earthquake_minute table in MySQL.
 
