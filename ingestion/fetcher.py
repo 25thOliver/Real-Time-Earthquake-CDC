@@ -5,26 +5,22 @@ from models import EarthquakeEvent
 import os
 
 
-# Fetch earthquake events from the past minute using the USGS API
-# Returns an empty list if no events are found
-def fetch_last_minute_events() -> List[EarthquakeEvent]:
-    # Defaults: fetch a slightly wider window to reduce gaps, rely on PK dedupe
-    window_minutes = int(os.getenv("FETCH_WINDOW_MINUTES", "5"))
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(minutes=window_minutes)
+def fetch_events_updated_after(updated_after: datetime) -> List[EarthquakeEvent]:
     url = os.getenv("USGS_API_URL", "https://earthquake.usgs.gov/fdsnws/event/1/query")
-    min_mag = os.getenv("USGS_MIN_MAG")  # optional
+    min_mag = os.getenv("USGS_MIN_MAG")
+
+    if updated_after.tzinfo is None:
+        updated_after = updated_after.replace(tzinfo=timezone.utc)
 
     params = {
         "format": "geojson",
-        "starttime": start.isoformat(timespec="seconds"),
-        "endtime": end.isoformat(timespec="seconds"),
+        "updatedafter": updated_after.isoformat(timespec="seconds"),
         "orderby": "time",
     }
     if min_mag:
         params["minmagnitude"] = min_mag
 
-    print(f"Fetching events from {start.isoformat()} to {end.isoformat()} ...")
+    print(f"Fetching events updated after {updated_after.isoformat()} ...")
 
     try:
         response = requests.get(url, params=params, timeout=15)
@@ -36,9 +32,9 @@ def fetch_last_minute_events() -> List[EarthquakeEvent]:
 
     features = data.get("features", [])
     if not features:
-        print("No events in the past minute -- waiting for the next poll.")
+        print("No new or updated events found since last watermark.")
         return []
-    
+
     events = []
     for f in features:
         props = f.get("properties", {})
@@ -47,23 +43,22 @@ def fetch_last_minute_events() -> List[EarthquakeEvent]:
             EarthquakeEvent(
                 id=f.get("id"),
                 time_ms=props.get("time"),
+                updated_ms=props.get("updated"),
                 mag=props.get("mag"),
                 place=props.get("place"),
                 url=props.get("url"),
                 detail=props.get("detail"),
-                longitude=coords[0],
-                latitude=coords[1],
-                depth=coords[2],
+                longitude=coords[0] if len(coords) > 0 else None,
+                latitude=coords[1] if len(coords) > 1 else None,
+                depth=coords[2] if len(coords) > 2 else None,
             )
         )
 
-    print(f"Fetched {len(events)} events.")
+    print(f"Fetched {len(events)} events (new or revised).")
     return events
 
 
-if __name__ == "__main__":
-    events = fetch_last_minute_events()
-    print(f"Fetched {len(events)} total events.")
-    if events:
-        for e in events[:3]: 
-            print(e.__dict__)
+def fetch_last_minute_events() -> List[EarthquakeEvent]:
+    window_minutes = int(os.getenv("FETCH_WINDOW_MINUTES", "5"))
+    start = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+    return fetch_events_updated_after(start)
