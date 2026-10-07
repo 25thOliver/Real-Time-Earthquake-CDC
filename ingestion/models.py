@@ -1,10 +1,10 @@
 from dataclasses import dataclass
 
 
-@dataclass
 class EarthquakeEvent:
     id: str
     time_ms: int
+    updated_ms: int
     mag: float
     place: str
     url: str
