@@ -17,7 +17,7 @@ db_port = os.getenv("MYSQL_PORT", 3306)
 db_url = f"mysql+mysqlconnector://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}"
 engine = create_engine(db_url, pool_pre_ping=True)
 
-# wait until DB is reachable for staging
+
 def wait_for_db(max_retries=10, delay=5):
     for attempt in range(max_retries):
         try:
@@ -31,18 +31,14 @@ def wait_for_db(max_retries=10, delay=5):
     raise Exception("Could not connect to database after several attempts.")
 
 
-# Ensure table exists according to defined schema
 def ensure_table(table_name: str, schema_sql: str | None = None):
     ddl = schema_sql or schemas.get(table_name)
     if ddl:
         with engine.begin() as conn:
             conn.execute(text(ddl))
         print(f"Table '{table_name}' verified/created.")
-    else:
-        print(f"No schema found for table '{table_name}', skipping explicit creation.")
 
 
-# Insert DataFrame to MySQL, letting pandas create table if not exists
 def insert_df(df: pd.DataFrame, table_name: str):
     if df.empty:
         print("No new rows to insert.")
@@ -53,15 +49,29 @@ def insert_df(df: pd.DataFrame, table_name: str):
             temp_table = f"_{table_name}_temp"
             df.to_sql(temp_table, conn, if_exists="replace", index=False)
 
-            # Explicit column list to avoid mismatched counts/order
-            cols = ", ".join(df.columns)
-            conn.execute(text(f"""
-                INSERT IGNORE INTO {table_name} ({cols})
-                SELECT {cols} FROM {temp_table};
-            """))
+            cols = list(df.columns)
+            cols_str = ", ".join(cols)
+            update_assignments = ", ".join([f"`{col}` = VALUES(`{col}`)" for col in cols if col != "id"])
 
-            conn.execute(text(f"DROP TABLE {temp_table};"))
-        print(f"Inserted {len(df)} new rows into '{table_name}' (duplicates ignored).")
+            upsert_query = f"""
+                INSERT INTO {table_name} ({cols_str})
+                SELECT {cols_str} FROM {temp_table}
+                ON DUPLICATE KEY UPDATE {update_assignments};
+            """
+
+            conn.execute(text(upsert_query))
+            conn.execute(text(f"DROP TABLE `{temp_table}`;"))
+        print(f"Successfully staged {len(df)} records into '{table_name}' (UPSERT executed).")
     except Exception as e:
-        print(f"Error inserting data: {e}")
+        print(f"Error upserting data into database: {e}")
 
+
+def get_max_updated_at(table_name: str) -> int | None:
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text(f"SELECT MAX(updated_ms) FROM {table_name}"))
+            val = result.scalar()
+            return int(val) if val is not None else None
+    except Exception as e:
+        print(f"Could not retrieve max updated timestamp: {e}")
+        return None
