@@ -1,28 +1,26 @@
 # Real-Time Earthquake CDC Pipeline
 
-Bringing live seismic data to life from API to dashboards, in seconds. This project builds a real-time Change Data Capture(CDC) pipeline that streams live earthquake data from the [USGS FDSN API](https://earthquake.usgs.gov/fdsnws/event/1/) into **MySQL**, mirrors every change through **Kafka + Debezium**, lands it to **PostgreSQL**, and visualizes global seismic trends **Grafana**.
+Bringing live seismic data to life from API to dashboards, in seconds. This project builds a real-time Change Data Capture (CDC) pipeline that streams live earthquake data from the [USGS FDSN API](https://earthquake.usgs.gov/fdsnws/event/1/) into **MySQL**, mirrors every change through **Kafka + Debezium**, lands it in **PostgreSQL**, and visualizes global seismic trends in **Grafana**.
 
 ## Project Overview
 
-Earthquakes happen without warning, and understanding their pattern. Traditional earthquake monitoring systems often have delays between when an earthquake occurs and when the data becomes available for analysis. This project eliminates that gap.
+Earthquakes happen without warning, and understanding their patterns requires timely data. Traditional earthquake monitoring architectures often introduce delays between when an event occurs and when data is available for downstream analytics. This pipeline minimizes that latency while keeping operational systems decoupled from analytical query loads.
 
-**Real-world impact:**
-- Emergency responders can see global seismic activity as it happens
-- Researchers can analyze earthquake patterns in real-time
-- The public can track seismic events in their region instantly
+**Why it Matters:**
+- **Decoupled Architecture:** Analytics and visualization run on a dedicated OLAP sink (PostgreSQL), isolating the operational database from heavy read queries.
+- **Revision Handling:** Historical earthquake revisions by USGS are captured automatically via Change Data Capture (CDC).
+- **Downtime Resilience:** High-watermark polling ensures no data gaps are created if the ingestion service restarts or recovers from downtime.
 
-Think of it like the difference between reading yesterday's newspaper vs. watching live news-except for earthquakes happening anywhere on Earth.
+Every minute, the U.S. Geological Survey (USGS) publishes new and revised earthquake events around the world.
+In this project, I built a pipeline that:
 
-Every minute, the U.S. Geological Survey(USGS) publishes new earthquake events around the world.
-In this project, we built a pipeline that:
+**1. Fetches** new and updated quakes using `updatedafter` watermarking from the USGS API
 
-**1. Fetches** new quakes every minute from the USGS API
+**2. Upserts** events into MySQL (serving as an operational OLTP database proxy)
 
-**2. Upserts** events into MySQL
+**3. Captures Changes** in real-time via Debezium & Kafka
 
-**3. Capture Changes** in real-time via Debezium & Kafka
-
-**4. Streams** them into PostgreSQL
+**4. Streams** change events asynchronously into PostgreSQL
 
 **5. Visualizes** live quakes and metrics in Grafana dashboards
 
@@ -30,25 +28,24 @@ In this project, we built a pipeline that:
 *Overall system architecture diagram*
 
 ## Architecture
-```
 USGS API → MySQL → Debezium → Kafka → JDBC Sink → PostgreSQL → Grafana
 
-```
+
 Each component plays a critical role:
 
-**- MySQL** - Primary database storing fresh quake data
+**- MySQL** - Operational database standing in as an OLTP engine where API ingestion updates take place.
 
-**- Adminer UI** - Visualizes our data in primary MySQL database after API ingestion
+**- Adminer UI** - Visualizes data in the primary MySQL database after API ingestion.
 
-**- Debezium** - Captures every insert/update via CDC
+**- Debezium** - Captures every insert and update at the log level via CDC without querying MySQL directly.
 
-**- Kafka** - Streams events through topics
+**- Kafka** - Streams database change events asynchronously through distributed topics.
 
-**- PostgreSQL** - Sink database for analytics
+**- PostgreSQL** - Analytical sink database dedicated to reporting and downstream visualization.
 
-**- Grafana** - Visualization layer for insights
+**- Grafana** - Visualization layer querying PostgreSQL for real-time dashboard insights.
 
-**- Kafka UI** - Monitors topics and connectors visually
+**- Kafka UI** - Monitors topics and connectors visually.
 
 ![Kafka Topics](images/kafka_topics.png)
 *Kafka UI showing topics*
@@ -56,101 +53,102 @@ Each component plays a critical role:
 ![Sink and Source Connectors](images/connectors.png)
 *Sink and Source Connectors*
 
-## Phases of the Build
-### Phase 1: USGS API Integration
+### Design Rationale: Why write API data into MySQL first?
+In production enterprise architectures, analytical consumers and reporting tools are rarely given direct read access to primary operational databases (OLTP) for performance and security reasons. Heavy analytical queries on operational databases risk locking tables or causing microservice latency.
 
-**What's happening here:** The United States Geological Survey(USGS) maintains a public API that reports every earthquake detected globally. We poll (ask) this API every 60s: "What earthquake happened in the last minute?"
-
-**Why every minute?** Earthquakes don't wait, and neither should our data. By checking every minute, we ensure our dashboard shows the most current picture of global seismic activity.
-
-A Python script polls the API:
-```bash
-https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&starttime={NOW-1min}&endtime={NOW}
-
-```
-New events are upserted into `earthquake_minute` table in MySQL.
+In this project, **MySQL stands in as an operational database proxy** to simulate a live transactional service receiving event updates. By using Debezium CDC on MySQL's row-based binary log, changes are streamed asynchronously through Kafka to PostgreSQL (the analytical sink) without adding read contention or query load to MySQL.
 
 ![Sample MySQL table rows after API ingestion](images/mysql_data.png)
 *Earthquake MySQL table rows after API ingestion in Adminer UI*
 
-### Phase 2: Change-Data-Capture(CDC)
-Imagine MySQL is a busy restaurant kitchen, and the binlog is a camera recording everything the chefs do. Debezium is like a food critic watching that recording in real-time, narrating every dish that gets plated, modified, or sent back.
+---
 
-Without CDC, we'd have to repeatedly ask MySQL "What's new?" every few seconds-inefficient and slow. With CDC, MySQL tells us the moment something changes. It's the difference between spam-refreshing your email vs. getting instant push notifications.
+## Phases of the Build
 
-- MySQL binary logging enabled (`binlog_format=ROW`)
-    *Understanding the Binlog*
-    At the core of this project lies **MySQL's Binary log(binlog), a special journal that records every change made to the database: inserts, updates, and deletes.
+### Phase 1: USGS API Integration & Resilience
 
-    By enabling it in **ROW format**, MySQL doesn't just log that "something changed". It records **exactly what changed** in each row. This is what allows tools like **Debezium** to reconstruct the full story for every database mutation in real-time.
-    ![Binlog Settings](images/binlog.png)
+**What's happening here:** The USGS maintains a public API reporting global seismic activity. The Python ingestion engine polls this API every 60 seconds.
 
-    **Why it Matters**
-    - `log_bin = ON` - Enables binary logging
-    - `binlog_format = ROW` - Captures row-level detail for CDC
-    - `server_id` - Provides a unique identifier for the MySQL instance(required by Debezium)
+**Handling Revisions & Downtime Gaps:**
+USGS frequently revises earthquake magnitude, depth, and epicenter location minutes or hours after initial detection as additional sensor data arrives. Furthermore, fixed time-window polling (`starttime`/`endtime`) would lose data during ingestor downtime.
 
-    Once the binlog is active, Debezium can tap into it via Kafka Connect, continuously streaming every change into Kafka topics—turning your database into a real-time data source.
+To solve both challenges:
+1. **`updatedafter` Watermarking:** The API is queried using the `updatedafter` parameter, bound to `MAX(updated_ms)` stored in MySQL (minus a 1-minute overlap safety buffer). This guarantees fetching both new events and historical event updates, while automatically recovering missing data after downtime.
+2. **CDC-Compatible Upserts:** Records are staged into MySQL using `ON DUPLICATE KEY UPDATE` (`UPSERT`). When historical records are revised, MySQL executes an `UPDATE`, emitting a binary log event that Debezium captures and streams downstream.
 
-- Debezium MySQL connector listens for changes
-- Kafka topics carry those changes
-- JDBC Sink connector writes them to PostgrSQL
+A Python script polls the API:
+```bash
+https://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&updatedafter={MAX_UPDATED_TIMESTAMP}
+New and updated events are staged into the earthquake_minute table in MySQL.
 
-![Debezium connector configuration (Kafka Connect UI)](images/sink_connector.png)
-*Debezium connector configuration (Kafka Connect UI)*
+Phase 2: Change Data Capture (CDC)
+Change Data Capture (CDC) enables event-driven database replication. Without CDC, downstream systems would need to repeatedly query MySQL ("polling the database"), causing slow performance and database load. With CDC, MySQL's binary log notifies Debezium the instant a row is inserted or updated.
 
-![Kafka UI → Topics → Messages view](images/kafka_messages.png)
-*Kafka UI → Topics → Messages view*
+MySQL binary logging enabled (binlog_format=ROW) Understanding the Binlog At the core of this pipeline lies MySQL's Binary log (binlog), a special journal that records database changes (inserts, updates, deletes) at the row level.
 
-### Phase 3: Grafana Visualization
+By enabling it in ROW format, MySQL records exactly what changed in each row. Debezium taps into this log via Kafka Connect, continuously streaming changes into Kafka topics in real time. Binlog Settings
+
+Why it Matters:
+
+log_bin = ON - Enables binary logging
+binlog_format = ROW - Captures row-level detail required for CDC
+server_id - Provides a unique identifier for the MySQL instance (required by Debezium)
+Debezium MySQL connector listens for binary log events
+
+Kafka topics carry change events asynchronously
+
+JDBC Sink connector writes/upserts them into PostgreSQL
+
+Debezium connector configuration (Kafka Connect UI) Debezium connector configuration (Kafka Connect UI)
+
+Kafka UI → Topics → Messages view Kafka UI → Topics → Messages view
+
+Phase 3: Grafana Visualization & Testing
 Grafana connects to PostgreSQL and brings seismic data to life through four panels:
 
-**1. Real-Time World Map** — Global quake visualization
-   - *Why it's useful:* Instantly see WHERE earthquakes are clustering. Notice the "Ring of Fire" pattern around the Pacific?
+1. Real-Time World Map — Global quake visualization showing seismic event epicenters.
 
-**2. Quakes Per Hour** — Time-series trend of activity
-   - *Why it's useful:* Spot unusual spikes that might indicate aftershock sequences or increased regional activity
+2. Quakes Per Hour — Time-series trend tracking seismic activity over time.
 
-**3. Top 5 Hotspot Regions** — Aggregated regional summary
-   - *Why it's useful:* Quantify which areas are most seismically active over time
+3. Top 5 Hotspot Regions — Aggregated regional summary of highly active seismic areas.
 
-**4. Quakes in Last Hour (Gauge)** — Real-time activity level
-   - *Why it's useful:* A quick "pulse check" showing if Earth is currently rumbling more than usual
+4. Quakes in Last Hour (Gauge) — Pulse check gauge showing immediate activity levels.
 
-![Grafana dashboard](images/grafana_dashboard.png)
-*Grafana dashboard (full view)*
+Grafana dashboard Grafana dashboard (full view)
 
-![Close-up of world map panel](images/world_map.png)
-*Close-up of world map panel*
+Close-up of world map panel Close-up of world map panel
 
-## Conclusion
-This project demonstrates the power of streaming data from a global earthquake API to actionable visualizations in real time.
-By Combining open-source tools like **Debezium**, **Kafka**, and **Grafana**, we built a pipeline that's not just functional but alive constantly evolving with Earth's tremors.
+Testing & CI/CD Pipeline
+To ensure reliability and code quality:
 
-**What we proved:**
-- Real-time data pipelines can be built with free, open-source tools
-- Complex infrastructure can be orchestrated with Docker Compose
-- CDC is the key to keeping distributed systems in sync without manual intervention
+Unit Testing: pytest test suite in tests/test_ingestion.py verifies data models, schema definitions, and API fetching logic using mocks.
+CI/CD: GitHub Actions workflow in .github/workflows/ci.yml automatically runs tests on every push and pull request.
+To run tests locally:
 
-**Real-world applications of this architecture:**
-- IoT sensor networks (replace earthquakes with temperature/pressure readings)
-- E-commerce inventory systems (track stock changes across warehouses)
-- Financial fraud detection (monitor transactions in real-time)
-- Healthcare patient monitoring (stream vital signs to alert systems)
+PYTHONPATH=. pytest
+Conclusion
+This project demonstrates the implementation of an event-driven Change Data Capture pipeline streaming seismic data from REST APIs to interactive dashboards. By combining open-source tools like Debezium, Kafka, PostgreSQL, and Grafana, this architecture decouples transactional operational workloads from downstream analytical processing.
 
-The principles here scale from earthquake monitoring to any domain where **seeing changes as they happen** creates value.
+What was accomplished:
 
-![Grafana + Kafka UI side-by-side for the closing shot](images/final_shot.png)
+Building an end-to-end CDC data streaming pipeline using open-source tools.
+Orchestrating multi-container infrastructure using Docker Compose.
+Eliminating data gaps and capturing historical event revisions using updatedafter watermarking and MySQL upserts.
+Decoupling operational database workloads from analytical reporting.
+Grafana + Kafka UI side-by-side for the closing shot
 
-### Quick Start
-```bash
+Quick Start
 # Start all services
 docker compose up -d
+
+# Run automated tests
+PYTHONPATH=. pytest
 
 # Access components
 MySQL        → localhost:3306
 Kafka UI     → http://localhost:8082
 Grafana      → http://localhost:3000
 PostgreSQL   → localhost:5435
-Adminer UI   → http://localhost:8080
-```
+Adminer UI   → http://localhost:8085
+
+---
