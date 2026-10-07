@@ -3,6 +3,7 @@ schemas = {
         CREATE TABLE IF NOT EXISTS earthquake_minute (
             id VARCHAR(64) PRIMARY KEY,
             time_ms BIGINT NOT NULL,
+            updated_ms BIGINT,
             mag DOUBLE,
             place VARCHAR(512),
             url VARCHAR(512),
