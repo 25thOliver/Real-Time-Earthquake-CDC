@@ -1,7 +1,7 @@
 import requests
 from datetime import datetime, timedelta, timezone
 from typing import List
-from models import EarthquakeEvent
+from ingestion.models import EarthquakeEvent
 import os
 
 
