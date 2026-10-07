@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from dotenv import load_dotenv
-from schema import schemas
+from ingestion.schema import schemas
 
 load_dotenv()
 
